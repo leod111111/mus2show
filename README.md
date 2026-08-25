@@ -16,7 +16,7 @@ Mus2show is a piece of software allowing you to :
 ### Requirements
 
 To run Mus2show, you need :
-* Windows (the last version if possible)
+* Windows (the latest version if possible)
 * A copy/clone of this repository
 * The latest version of python installed on your computer
 * The following python packages :    
