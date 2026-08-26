@@ -15,7 +15,9 @@ Mus2show is a piece of software allowing you to :
 
 ### Requirements
 
-To run Mus2show, you need :
+There are two different manners of running Mus2Show. If you just want to simply use Mus2Show, you can download the .zip file of the latest release, unzip it on your computer, and you're done ! The only requirement for this way of running Mus2Show is Windows.
+
+If you want to run Mus2Show for development purposes (make improvements and changes in the source code), here's what you will need :
 * Windows (the latest version if possible)
 * A copy/clone of this repository
 * The latest version of python installed on your computer
@@ -50,6 +52,4 @@ mus2show/
     └── other ffmpeg files
 ```
 
-The process of getting all these dependancies set is quite overcomplicated, but remember Mus2Show is still in an early development stage. A release with either zip archive or exe installer will be available soon.
-
-I also plan to make an in-app tutorial before the end of 2026, to make learning how to use the app more easy and enjoyable.
+I also plan to make an in-app tutorial by the end of 2026, to make learning how to use the app more easy and enjoyable.
