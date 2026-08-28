@@ -8,8 +8,10 @@ from PySide6.QtGui import QAction, QFont, QKeySequence, QMouseEvent, QPainter, Q
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 import os
-import requests
-import sys
+import tempfile
+
+temp_dir = tempfile.gettempdir() + "/mus2show/"
+print(temp_dir)
 
 gui_text = [
                 "Mus2Show",
@@ -66,154 +68,6 @@ startupinfo.dwFlags |= subprocess.CREATE_NO_WINDOW
 print(str(str(os.path.dirname(__file__)) + "/yt_dlp/yt-dlp.exe"))
 subprocess.run([str(str(os.path.dirname(__file__)) + "/yt_dlp/yt-dlp.exe"), "-U"])
 
-class processed_wav():
-    def __init__(self, bytes, channels, sr):
-        self.bytes = bytes
-        self.channels = channels
-        self.samplerate = sr
-
-def write_m2show(path: str, name: str, data: list):
-    '''
-    Writes a .m2show file at the specified path, with the specified project name, and using the specified data.
-    [
-        The file is organized like the following example :
-            m2show v1.1
-            ProjectName
-            2026-01-16
-            
-            no;type;title;content;startingAt(ifTypeIsAudio);endingAt(ifTypeIsAudio)
-            1;text;note1;it's a note, for reminding myself something
-            2;audio;reallygreataudio;[base64_encoded_mp3];12.253;26.359
-        
-        startingAt and endingAt will be ingored if they are 0.00
-    '''
-    with open(path, "w") as f:
-        f.write("m2show v1.1\n")
-        f.write(name)
-        f.write(f"\n{datetime.now().strftime("%Y-%m-%d")}\n\n")
-        f.write("no;type;title;content;startingAt(ifTypeIsAudio);endingAt(ifTypeIsAudio);channels(ifFileTypeIsAudio)")
-        for i in range(0, len(data)):
-            f.write("\n" + str(data[i]["no"]) + ";" + data[i]["type"] + ";" + data[i]["title"] + ";" + data[i]["content"] + int(data[i]["type"] == "audio") * (";" + str(data[i].get("startingAt")) + ";" + str(data[i].get("endingAt")) + ";" + str(data[i].get("channels"))))
-
-def read_m2show(path: str):
-    '''
-    Reads a .m2show file. Returns a dict organized as following:
-    [
-        {
-            'path': 'path/to/the/file.m2show', #the specified path, saved here for using it later
-            'name': 'ProjectName', #the name of the project, not always the same as the file's one (depending on the user's choice)
-            'date': 'YYYY-MM-DD', #last modification date
-            'data': [
-                {
-                    'content': 'this is very interesting, right ?',
-                    'no': 1,
-                    'title': 'awesome note',
-                    'type': 'text'
-                },
-                {
-                    'content': "this will be base64 encoded mp3",
-                    'endingAt': 46.698,
-                    'no': 2,
-                    'startingAt': 13.578,
-                    'title': 'the title of the audio',
-                    'type': 'audio'
-                }
-            ]
-        }
-    '''
-    with open(path, "r") as f:
-        read_file = {"path": path}
-        line = f.readline().strip("\n")
-        if line != "m2show v1.1":
-            return {"error": True}
-        line = f.readline().strip("\n")
-        read_file["name"] = line
-        line = f.readline().strip("\n")
-        read_file["date"] = line
-        for _ in range(0, 2):
-            line = f.readline()
-        read_file["data"] = []
-        for line in f:
-            list_line = line.strip("\n").split(";")
-            read_file["data"].append(
-                {
-                    "no": int(list_line[0]),
-                    "type": list_line[1],
-                    "title": list_line[2],
-                    "content": list_line[3]
-                }
-            )
-            if read_file["data"][len(read_file["data"]) - 1]["type"] == "audio":
-                read_file["data"][len(read_file["data"]) - 1]["startingAt"], read_file["data"][len(read_file["data"]) - 1]["endingAt"], read_file["data"][len(read_file["data"]) - 1]["channels"] = float(list_line[4]), float(list_line[5]), float(list_line[6])
-    return read_file
-
-def download(url: str):
-    return subprocess.run([
-                            str(str(os.path.dirname(__file__)) + "/yt_dlp/yt-dlp.exe"),
-                            "--ffmpeg-location", str(str(os.path.dirname(__file__)) + "/ffmpeg/bin"),
-                            "--js-runtimes", "node:nodejs/node.exe",
-                            "--no-part",
-                            "--no-cache-dir",
-                            "-q",
-                            "--no-warnings",
-                            "--no-playlist",
-                            "--extract-audio",
-                            "--audio-multistreams",
-                            "--audio-quality", "0",
-                            "-f", "ba[ext=m4a]/ba[ext=webm]/ba[ext=opus]",
-                            "--no-check-certificate",
-                            "--no-mtime",
-                            "-o", "-",
-                            url
-                        ],
-                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        text=False,
-                    ).stdout
-
-def process_audios(data: list):
-    processed_data = []
-    for d in data['data']:
-        newd = d
-        if d.get('type') == 'audio':
-            newd['content'] = b64decode(d.get('content'))
-            if d.get('endingAt') != 0:
-                newd['content'] = subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", "pipe:0", "-ss", str(newd.get('startingAt')), "-to", str(newd.get('endingAt')), "-c", "copy", "-f", "wav", "pipe:1"], capture_output=True, input=newd.get('content')).stdout
-                newd['startingAt'] = 0.0
-                newd['endingAt'] = 0.0
-            else:
-                newd['content'] = subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", "pipe:0", "-ss", str(newd.get('startingAt')), "-c", "copy", "-f", "wav", "pipe:1"], capture_output=True, input=newd.get('content')).stdout
-        processed_data.append(newd)
-    data['data'] = processed_data
-    return data
-
-def cut_audio(audio: bytes, start: int | float = 0.00, end: int | float = 0.00):
-    if end != 0:
-        return subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", "pipe:0", "-ss", str(start), "-to", str(end), "-c", "copy", "-f", "wav", "pipe:1"], capture_output=True, input=audio).stdout
-    else:
-        return subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", "pipe:0", "-ss", str(start), "-c", "copy", "-f", "wav", "pipe:1"], capture_output=True, input=audio).stdout
-
-def play_audio(audio: processed_wav, start: float = 0.0, end: float = 0.0):
-    '''
-    Plays the given audio.
-    [
-        To do that, it creates a temporary .mp3 file before playing it.
-        Uses pyaudio.
-    '''
-    '''decode_wav(audio, f"output{no}.mp3")
-    data, fs = sf.read(f"output{no}.mp3", dtype="float32")
-    sd.play(data, fs, device=int(input("Entrer une ID\n >> ")))
-    sd.wait()
-    #remove(f"output{no}.mp3")'''
-    subprocess.run([
-                    "ffmpeg/bin/ffplay.exe",
-                    "-nodisp",
-                    "-autoexit",
-                    "-loglevel", "quiet",
-                    "pipe:0"
-                ],
-                input=audio.bytes,
-                )
-
 class TempWriter(QObject):
     progresssignal = Signal(float)
     finishedsignal = Signal()
@@ -226,9 +80,9 @@ class TempWriter(QObject):
         total = len(self.data)
         i = 1
         for d in self.data:
-            if os.path.exists(f'temp/{i}.wav'):
-                os.remove(f'temp/{i}.wav')
-            with open(f'temp/{i}.wav', 'xb') as f:
+            if os.path.exists(f'{temp_dir}{i}.wav'):
+                os.remove(f'{temp_dir}{i}.wav')
+            with open(f'{temp_dir}{i}.wav', 'xb') as f:
                 f.write(d['content'])
             self.progresssignal.emit(i/total*100)
             i += 1
@@ -263,7 +117,7 @@ class Downloader(QObject):
                 "--no-check-certificate",
                 "--no-mtime",
                 "--js-runtimes", f"node:{str(os.path.dirname(__file__))}/nodejs/node.exe",
-                "-o", f"temp/dtemp{self.id}.%(ext)s",
+                "-o", f"{temp_dir}dtemp{self.id}.%(ext)s",
                 self.url.replace("&", "^&")
             ],
             text=False,
@@ -271,7 +125,7 @@ class Downloader(QObject):
             shell=True
         )
         self.logsignal.emit(gui_text[4])
-        for temppath in os.listdir("temp"):
+        for temppath in os.listdir(temp_dir):
             list_temp_path = temppath.split(".")
             list_temp_path.pop()
             for char_index in range(len(list_temp_path) - 1):
@@ -280,9 +134,9 @@ class Downloader(QObject):
             if filename_without_ext == f"dtemp{self.id}":
                 audio_filename = temppath
                 break
-        with open(f"temp/{audio_filename}", "rb") as processed_audio_file:
+        with open(f"{temp_dir}{audio_filename}", "rb") as processed_audio_file:
             self.wav_bytes = processed_audio_file.read()
-        os.remove(f"temp/{audio_filename}")
+        os.remove(f"{temp_dir}{audio_filename}")
         self.logsignal.emit(gui_text[5])
         self.outputsignal.emit(self.wav_bytes)
         self.finishedsignal.emit()
@@ -388,8 +242,8 @@ class Cutter(QObject):
     
     def run(self):
         self.logsignal.emit(gui_text[20])
-        input_path = f"temp/ctemp{self.id}.wav"
-        output_path = f"temp/cotemp{self.id}.wav"
+        input_path = f"{temp_dir}ctemp{self.id}.wav"
+        output_path = f"{temp_dir}cotemp{self.id}.wav"
         with open(input_path, "xb") as temp_file:
             temp_file.write(self.bytes)
         if self.end != 0:
@@ -779,8 +633,8 @@ class MainWindow(QMainWindow):
         self.player.setPosition(self.player.position() - 10000)
     
     def next_audio(self):
-        if os.path.exists(f'temp/{self.player_current_audio + 1}.wav'):
-            self.player.setSource(f'temp/{self.player_current_audio + 1}.wav')
+        if os.path.exists(f'{temp_dir}{self.player_current_audio + 1}.wav'):
+            self.player.setSource(f'{temp_dir}{self.player_current_audio + 1}.wav')
             self.player_current_audio += 1
             self.former_audio_label.setText(f'{self.player_current_audio - 1}. {self.data['data'][self.player_current_audio - 2]['title']}')
             self.audio_label.setText(f'{self.player_current_audio}. {self.data['data'][self.player_current_audio - 1]['title']}')
@@ -794,8 +648,8 @@ class MainWindow(QMainWindow):
                 self.play_audio_button.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_MediaPause))
     
     def former_audio(self):
-        if os.path.exists(f'temp/{self.player_current_audio - 1}.wav'):
-            self.player.setSource(f'temp/{self.player_current_audio - 1}.wav')
+        if os.path.exists(f'{temp_dir}{self.player_current_audio - 1}.wav'):
+            self.player.setSource(f'{temp_dir}{self.player_current_audio - 1}.wav')
             self.player_current_audio -= 1
             self.next_audio_label.setText(f'{self.player_current_audio + 1}. {self.data['data'][self.player_current_audio]['title']}')
             self.audio_label.setText(f'{self.player_current_audio}. {self.data['data'][self.player_current_audio - 1]['title']}')
@@ -1074,7 +928,7 @@ class MainWindow(QMainWindow):
             self.threads[thread_id].start()
     
     def launch_playing(self):
-        self.player.setSource('temp/1.wav')
+        self.player.setSource(f'{temp_dir}1.wav')
         self.player_current_audio = 1
         self.central_widget.hide()
         self.audio_label.setText('1. ' + self.data['data'][0]['title'])
@@ -1180,9 +1034,9 @@ class MainWindow(QMainWindow):
     def update_cache_audio(self, bytes: bytes):
         self.cache_audio = bytes
         self.player.setSource(QUrl(""))
-        if os.path.exists("temp/temp.wav"):
-            os.remove("temp/temp.wav")
-        with open("temp/temp.wav", "xb") as temp:
+        if os.path.exists(f"{temp_dir}temp.wav"):
+            os.remove(f"{temp_dir}temp.wav")
+        with open(f"{temp_dir}temp.wav", "xb") as temp:
             temp.write(self.cache_audio)
         self.cutter_hour_start_input.setText("")
         self.cutter_minute_start_input.setText("")
@@ -1190,7 +1044,7 @@ class MainWindow(QMainWindow):
         self.cutter_hour_end_input.setText("")
         self.cutter_minute_end_input.setText("")
         self.cutter_second_end_input.setText("")
-        self.player.setSource(QUrl("temp/temp.wav"))
+        self.player.setSource(QUrl(os.path.normpath(f"{temp_dir}temp.wav").replace(os.sep, '/')))
         self.add_download_log(gui_text[6])
     
     def load_audio_file(self):
