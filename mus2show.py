@@ -1,10 +1,11 @@
 from base64 import b64decode, b64encode
 import subprocess
 from datetime import datetime
+import sys
 from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QLabel, QMainWindow, QGridLayout, QMenu, QProgressBar, QScrollArea, QSizePolicy, QToolButton, QWidget, QLineEdit, QPushButton, QPlainTextEdit, QStyle, QVBoxLayout, QHBoxLayout
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import QDir, QUrl, QObject, QThread, Signal, Qt, QTimer
-from PySide6.QtGui import QAction, QFont, QKeySequence, QMouseEvent, QPainter, QPixmap, QTextOption
+from PySide6.QtGui import QAction, QFont, QIcon, QKeySequence, QMouseEvent, QPainter, QPixmap, QTextOption
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 import os
@@ -62,11 +63,10 @@ gui_text = [
 
 print(gui_text[43])
 
-startupinfo = subprocess.STARTUPINFO()
-startupinfo.dwFlags |= subprocess.CREATE_NO_WINDOW
+subprocess_creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 print(str(str(os.path.dirname(__file__)) + "/yt_dlp/yt-dlp.exe"))
-subprocess.run([str(str(os.path.dirname(__file__)) + "/yt_dlp/yt-dlp.exe"), "-U"])
+subprocess.run([str(str(os.path.dirname(__file__)) + "/yt_dlp/yt-dlp.exe"), "-U"], creationflags=subprocess_creationflags)
 
 class TempWriter(QObject):
     progresssignal = Signal(float)
@@ -121,7 +121,7 @@ class Downloader(QObject):
                 self.url.replace("&", "^&")
             ],
             text=False,
-            startupinfo=startupinfo,
+            creationflags=subprocess_creationflags,
             shell=True
         )
         self.logsignal.emit(gui_text[4])
@@ -157,7 +157,7 @@ class Loader(QObject):
             self.logsignal.emit(gui_text[8])
         else:
             self.logsignal.emit(gui_text[9])
-        self.wav_bytes = subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-loglevel", "quiet", "-i", "pipe:0", "-f", "wav", "-acodec", "pcm_s16le", "pipe:1"], input=self.bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo, shell=True).stdout
+        self.wav_bytes = subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-loglevel", "quiet", "-i", "pipe:0", "-f", "wav", "-acodec", "pcm_s16le", "pipe:1"], input=self.bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess_creationflags, shell=True).stdout
         if str(self.path)[-4:] != ".wav":
             self.logsignal.emit(gui_text[5])
         else:
@@ -247,9 +247,9 @@ class Cutter(QObject):
         with open(input_path, "xb") as temp_file:
             temp_file.write(self.bytes)
         if self.end != 0:
-            subprocess.run([str(os.path.dirname(__file__)) + "/ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", input_path, "-ss", str(self.start / 1000), "-to", str(self.end / 1000), "-c", "copy", "-f", "wav", output_path], startupinfo=startupinfo, shell=True)
+            subprocess.run([str(os.path.dirname(__file__)) + "/ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", input_path, "-ss", str(self.start / 1000), "-to", str(self.end / 1000), "-c", "copy", "-f", "wav", output_path], creationflags=subprocess_creationflags, shell=True)
         else:
-            subprocess.run([str(os.path.dirname(__file__)) + "/ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", input_path, "-ss", str(self.start / 1000), "-c", "copy", "-f", "wav", output_path], startupinfo=startupinfo, shell=True)
+            subprocess.run([str(os.path.dirname(__file__)) + "/ffmpeg/bin/ffmpeg.exe", "-f", "wav", "-acodec", "pcm_s16le", "-i", input_path, "-ss", str(self.start / 1000), "-c", "copy", "-f", "wav", output_path], creationflags=subprocess_creationflags, shell=True)
         with open(output_path, "rb") as temp_file:
             self.outputsignal.emit((temp_file.read()))
         os.remove(input_path)
@@ -358,6 +358,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(gui_text[0])
         self.setGeometry(15, 50, 700, 450)
+        self.setWindowIcon(QIcon(str(os.path.dirname(__file__)) + "/gui_resources/mus2show.ico"))
         self.currentthreadsid = 0
         self.currentworkerid = 0
         self.threads = {}
