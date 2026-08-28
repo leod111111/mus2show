@@ -22,7 +22,6 @@ If you want to run Mus2Show for development purposes (make improvements and chan
 * A copy/clone of this repository
 * The latest version of python installed on your computer
 * The following python packages :    
-    * requests
     * PySide6
 * The latest versions of the following software **in the mus2show folder** :    
     * [yt-dlp](https://github.com/yt-dlp/yt-dlp)    
@@ -30,7 +29,7 @@ If you want to run Mus2Show for development purposes (make improvements and chan
     * [ffmpeg](https://ffmpeg.org/download.html)
 
 
-For the python packages, you can run the following command (if you have pip installed) : `pip install pyside6 requests`.
+For the python packages, you can run the following command (if you have pip installed) : `pip install pyside6`.
 
 For the other dependancies (yt-dlp, node.js and ffmpeg), install them that so it follows the following structure :
 ```text
