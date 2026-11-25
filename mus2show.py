@@ -10,6 +10,41 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 import os
 import tempfile
+import velopack
+import logging
+
+def check_for_updates():
+    try:
+        source = velopack.GithubSource(
+            "https://github.com/leod111111/mus2show",
+            access_token=None,
+            prerelease=False
+        )
+
+        manager = velopack.UpdateManager(source)
+
+        update = manager.check_for_updates()
+
+        if update is None:
+            return
+
+        logging.info("Update available")
+
+        manager.download_updates(update)
+
+        manager.apply_updates_and_restart(update)
+
+    except RuntimeError as e:
+        if "not properly installed" in str(e):
+            logging.debug(
+                "Updates disabled outside of Velopack installation."
+            )
+            return
+
+        logging.exception("Velopack error")
+
+    except Exception:
+        logging.exception("Unable to check for updates")
 
 temp_dir = tempfile.gettempdir() + "/mus2show/"
 os.makedirs(temp_dir, exist_ok=True)
@@ -1100,6 +1135,8 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
 
 if __name__ == "__main__":
+    velopack.App().run()
+    check_for_updates()
     print(gui_text[36])
     app = QApplication()
     window = MainWindow()
