@@ -294,29 +294,37 @@ class Cutter(QObject):
 class ClickableLabel(QLabel):
     clicked = Signal(int)#emits ms time
     
-    def __init__(self, duration: int, width: int):
+    def __init__(self, duration: int, width: int, side_padding: int = 12):
         super().__init__()
         self.duration = duration #in ms
         self.svgwidth = width
+        self.side_padding = side_padding
         self.setMouseTracking(True)
     
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(event.position().toPoint().x() / self.svgwidth * self.duration)
+            track_width = self.svgwidth - 2 * self.side_padding
+
+            if track_width > 0:
+                x = event.position().toPoint().x() - self.side_padding
+                progress = min(max(x / track_width, 0), 1)
+                self.clicked.emit(round(progress * self.duration))
+
         super().mousePressEvent(event)
 
 class AudioTimeline(QWidget):
     cursor_moved = Signal(int) #emits the time in ms
     
-    def __init__(self, duration: int, width: int):
+    def __init__(self, duration: int, width: int, side_padding: int = 12):
         super().__init__()
         self.duration = duration #in ms
         self.svgwidth = width
         self.current_time = 0 #ms too
+        self.side_padding = side_padding
         
-        self.label = ClickableLabel(self.duration, self.svgwidth)
+        self.label = ClickableLabel(self.duration, self.svgwidth, self.side_padding)
         self.label.clicked.connect(self.on_clicked)
-        self.update_svg()
+        self.label.setStyleSheet("background: transparent;")
         
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_cursor)
@@ -332,13 +340,29 @@ class AudioTimeline(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.label)
         self.setLayout(layout)
+        
+        self.update_svg()
+        QTimer.singleShot(0, self.update_width)
     
     def update_width(self):
-        self.layout().update()
-        new_width = self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right()
+        if self.layout() is None:
+            return
+
+        margins = self.layout().contentsMargins()
+        new_width = self.width() - margins.left() - margins.right()
+
+        if new_width <= 0 or new_width == self.svgwidth:
+            return
+
         self.svgwidth = new_width
         self.label.svgwidth = new_width
         self.update_svg()
+    
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        if self.layout() is not None:
+            self.update_width()
     
     def change_playing(self, playing: bool):
         if playing:
@@ -347,23 +371,53 @@ class AudioTimeline(QWidget):
             self.timer.stop()
     
     def update_svg(self):
-        cursor_x = self.current_time / self.duration * self.svgwidth
+        progress = self.current_time / self.duration if self.duration > 0 else 0
+        progress = min(max(progress, 0), 1)
+        padding = self.label.side_padding
+        track_width = max(0, self.svgwidth - 2 * padding)
+        cursor_x = padding + progress * track_width
         svg = f'''
-            <svg width="{self.svgwidth}" height="100" viewBox="0 0 {self.svgwidth} 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-                <rect x="0" y="45" width="{self.svgwidth}" height="10" fill="black" />
-                <rect x="0" y="0" width="10" height="100" fill="black" />
-                <rect x="{self.svgwidth - 10}" y="0" width="10" height="100" />
-                <rect id="cursor" x="{cursor_x}" y="0" width="10" height="100" fill="cadetblue" />
-                <text x="{self.svgwidth / 2}" y="90" font-family="Arial" font-size="15" font-weight="bold" text-anchor="middle" fill="black">{self.current_time // 3600000}:{(self.current_time % 3600000) // 60000}:{(self.current_time % 60000) / 1000}</text>
-            </svg>
+            <svg width="{self.svgwidth}" height="100"
+             viewBox="0 0 {self.svgwidth} 100"
+             xmlns="http://www.w3.org/2000/svg">
+
+            <!-- background -->
+            <rect x="{padding}" y="22"
+                width="{track_width}" height="8"
+                rx="4" fill="#DCE2EA" />
+
+            <!-- progress -->
+            <rect x="{padding}" y="22"
+                width="{cursor_x - padding}" height="8"
+                rx="4" fill="#3B82F6" />
+
+            <!-- cursor -->
+            <circle cx="{cursor_x}" cy="26"
+                    r="7" fill="#2563EB" />
+
+            <!-- current time -->
+            <text x="{self.svgwidth / 2}" y="75"
+                  font-family="Arial" font-size="16"
+                  font-weight="bold" text-anchor="middle"
+                  fill="#334155">
+                {self.current_time // 3600000}:{(self.current_time % 3600000) // 60000}:{self.current_time % 60000 / 1000:.1f}
+            </text>
+        </svg>
         '''
         renderer = QSvgRenderer()
         renderer.load(svg.encode("utf-8"))
         
+        if self.svgwidth <= 0:
+            return
+        
         pixmap = QPixmap(self.svgwidth, 100)
-        pixmap.fill("white")
+        if pixmap.isNull():
+            return
+        pixmap.fill(Qt.GlobalColor.transparent)
         
         painter = QPainter(pixmap)
+        if not painter.isActive():
+            return
         renderer.render(painter)
         painter.end()
         
