@@ -12,7 +12,7 @@ import os
 import tempfile
 
 temp_dir = tempfile.gettempdir() + "/mus2show/"
-print(temp_dir)
+os.makedirs(temp_dir, exist_ok=True)
 
 gui_text = [
                 "Mus2Show",
@@ -157,7 +157,7 @@ class Loader(QObject):
             self.logsignal.emit(gui_text[8])
         else:
             self.logsignal.emit(gui_text[9])
-        self.wav_bytes = subprocess.run(["ffmpeg/bin/ffmpeg.exe", "-loglevel", "quiet", "-i", "pipe:0", "-f", "wav", "-acodec", "pcm_s16le", "pipe:1"], input=self.bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess_creationflags, shell=True).stdout
+        self.wav_bytes = subprocess.run([str(os.path.dirname(__file__)) + "/ffmpeg/bin/ffmpeg.exe", "-loglevel", "quiet", "-i", "pipe:0", "-f", "wav", "-acodec", "pcm_s16le", "pipe:1"], input=self.bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess_creationflags, shell=True).stdout
         if str(self.path)[-4:] != ".wav":
             self.logsignal.emit(gui_text[5])
         else:
@@ -635,7 +635,7 @@ class MainWindow(QMainWindow):
     
     def next_audio(self):
         if os.path.exists(f'{temp_dir}{self.player_current_audio + 1}.wav'):
-            self.player.setSource(f'{temp_dir}{self.player_current_audio + 1}.wav')
+            self.player.setSource(QUrl(os.path.normpath(f'{temp_dir}{self.player_current_audio + 1}.wav').replace(os.sep, '/')))
             self.player_current_audio += 1
             self.former_audio_label.setText(f'{self.player_current_audio - 1}. {self.data['data'][self.player_current_audio - 2]['title']}')
             self.audio_label.setText(f'{self.player_current_audio}. {self.data['data'][self.player_current_audio - 1]['title']}')
@@ -650,7 +650,7 @@ class MainWindow(QMainWindow):
     
     def former_audio(self):
         if os.path.exists(f'{temp_dir}{self.player_current_audio - 1}.wav'):
-            self.player.setSource(f'{temp_dir}{self.player_current_audio - 1}.wav')
+            self.player.setSource(QUrl(os.path.normpath(f'{temp_dir}{self.player_current_audio - 1}.wav').replace(os.sep, '/')))
             self.player_current_audio -= 1
             self.next_audio_label.setText(f'{self.player_current_audio + 1}. {self.data['data'][self.player_current_audio]['title']}')
             self.audio_label.setText(f'{self.player_current_audio}. {self.data['data'][self.player_current_audio - 1]['title']}')
@@ -929,7 +929,7 @@ class MainWindow(QMainWindow):
             self.threads[thread_id].start()
     
     def launch_playing(self):
-        self.player.setSource(f'{temp_dir}1.wav')
+        self.player.setSource(QUrl(os.path.normpath(f'{temp_dir}1.wav').replace(os.sep, '/')))
         self.player_current_audio = 1
         self.central_widget.hide()
         self.audio_label.setText('1. ' + self.data['data'][0]['title'])
